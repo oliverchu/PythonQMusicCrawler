@@ -2,13 +2,14 @@ import requests
 import json
 import sqlite3
 import time
+import pygame
 
 conn = sqlite3.connect('qmusic.db')
 print "Opened database successfully"
 c = conn.cursor()
 c.execute('''
   CREATE TABLE  IF NOT EXISTS  top_songs(
-  topID INT PRIMARY KEY NOT NULL ,
+  topID INT  PRIMARY KEY  NOT NULL ,
   ListName TEXT, 
   listennum INT,
   pic TEXT,
@@ -27,10 +28,13 @@ c.execute('''
   singer TEXT,
   songmid TEXT,
   date TEXT,
-  tid INT  
+  tid INT,
+  lyric TEXT 
 )''')
 
 conn.commit()
+
+num = 0
 
 
 def get_top():
@@ -41,23 +45,25 @@ def get_top():
     pretty_json(dic_top)
     for group in dic_top:
         for song in group['List']:
-            # sql = "INSERT INTO top_songs VALUES(%d,'%s',%d,'%s','%s','%s','%s',%d)"%(song['topID'],
-            #                                                                        song['ListName'],
-            #                                                                        song['listennum'],
-            #                                                                        song['pic'],
-            #                                                                        song['update_key'],
-            #                                                                        song['showtime'],
-            #                                                                        group['GroupName'],
-            #                                                                        group['Type'])
-            # c.execute(sql)
+            d = (song['topID'],
+                 song['ListName'],
+                 song['listennum'],
+                 song['pic'],
+                 song['update_key'],
+                 song['showtime'],
+                 group['GroupName'],
+                 group['Type'])
+            try:
+                c.execute("INSERT INTO top_songs VALUES(?,?,?,?,?,?,?,?)", d)
+                conn.commit()
+            except:
+                print "error"
             type = ""
             if song['type'] == 0:
                 type = "top"
             else:
                 type = "global"
             get_top_songs(song['topID'], song['update_key'], type)
-
-    # conn.commit()
     return dic_top
 
 
@@ -66,19 +72,6 @@ def pretty_json(dic):
 
 
 def get_top_songs(tid, update_Key, type):
-    """
-    https://c.y.qq.com/v8/fcg-bin/fcg_v8_toplist_cp.fcg?tpl=3&page=detail&date=2017_38
-    &topid=108&type=global&song_begin=0&song_num=30&g_tk=5381&jsonpCallback=MusicJsonCallbacktoplist
-    &loginUin=0&hostUin=0&format=jsonp&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0
-    songid INT PRIMARY KEY NOT NULL ,
-  albumname TEXT,
-  songorig TEXT,
-  songname TEXT,
-  albumid INT,
-  singer TEXT,
-  songmid TEXT
-    date TEXT
-    """
     url = 'https://c.y.qq.com/v8/fcg-bin/fcg_v8_toplist_cp.fcg?tpl=3&page=detail&date=%s&topid=%s&type=%s' \
           '&song_begin=0&song_num=100&g_tk=5381&jsonpCallback=&loginUin=0&hostUin=0&format' \
           '=jsonp&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0 ' % (update_Key, tid, type)
@@ -86,23 +79,29 @@ def get_top_songs(tid, update_Key, type):
     # pretty_json(dic_top_songs)
     for s in dic_top_songs['songlist']:
         data = s['data']
+        d = (data['songid'],
+             data['albumname'],
+             data['songorig'],
+             data['songname'],
+             data['albumid'],
+             json.dumps(
+                 data['singer']),
+             data['songmid'],
+             update_Key,
+             tid)
+
         try:
-            sql = "INSERT INTO top_song_list VALUES (%d,'%s','%s','%s',%d,'%s','%s','%s',%d)" % (data['songid'],
-                                                                                                 data['albumname'],
-                                                                                                 data['songorig'],
-                                                                                                 data['songname'],
-                                                                                                 data['albumid'],
-                                                                                                 json.dumps(
-                                                                                                     data['singer']),
-                                                                                                 data['songmid'],
-                                                                                                 update_Key,
-                                                                                                 tid)
-            c.execute(sql)
+            c.execute("INSERT  INTO top_song_list VALUES ( ?,?,?,?,?,?,?,?,?,?)", d)
+            conn.commit()
         except Exception as ex:
             print ex.message
-
-    conn.commit()
-
+            return
+        lyric = get_song_detail(data['songid'])
+        try:
+            c.execute("INSERT  INTO top_song_list (lyric)VALUES (?)", (lyric))
+            conn.commit()
+        except Exception as ex:
+            print "append lyric error:", ex.message
 
 def get_song_detail(sid):
     params = '''
@@ -114,12 +113,54 @@ def get_song_detail(sid):
 
     url = "https://u.y.qq.com/cgi-bin/musicu.fcg?_=%s" % sid
     dic_detail = json.loads(requests.post(url, params).content)
-    pretty_json(dic_detail)
-    return dic_detail
+    # pretty_json(dic_detail)
+    for info in dic_detail["song_detail"]["data"]["info"]:
+        if info["type"] == "lyric":
+            lyric = info["content"][0]["value"]
+            return lyric
+    return ""
 
 
-get_top()
-# https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?songmid=003hvIkL1QiILk&tpl=yqq_song_detail&format=jsonp&callback=getOneSongInfoCallback&g_tk=5381&jsonpCallback=getOneSongInfoCallback&loginUin=0&hostUin=0&format=jsonp&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0
+def get_single_song_local(songmid):
+    return "ws.stream.qqmusic.qq.com/C100%s.m4a?fromtag=38" % (songmid)
 
-# get_song_detail("203691607")
-conn.close()
+
+def get_single_song(songmid):
+    url = "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?songmid=%s&tpl=yqq_song_detail&format" \
+          "=json&callback=&g_tk=5381&jsonpCallback=&loginUin=0&hostUin=0" \
+          "&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0 " % (songmid)
+    content = requests.get(url).content
+    dic_single_song = json.loads(content)
+    pretty_json(dic_single_song)
+    urls = dic_single_song["url"]
+    id = dic_single_song["data"][0]["id"]
+    return urls[str(id)]
+
+
+def play_song(url):
+    track = pygame.mixer.music.load(url)
+    pygame.mixer.music.play()
+
+
+def download_file(url, path):
+    r = requests.get(url, stream=True)
+    f = open(path, "wb")
+    for chunk in r.iter_content(chunk_size=512):
+        if chunk:
+            f.write(chunk)
+    f.close()
+
+
+if __name__ == "__main__":
+    # get_top()
+    pygame.mixer.init()
+    # r = c.execute("select songmid from top_song_list")
+    # for d in r:
+    #     songmid = d[0]
+    #     url = get_single_song_local(songmid)
+    #     play_song("http://"+url)
+    #     break
+    url = "http://" + get_single_song_local("001bhwUC1gE6ep")
+    download_file(url, "./music.m4a")
+    play_song("./music.m4a")
+    conn.close()
