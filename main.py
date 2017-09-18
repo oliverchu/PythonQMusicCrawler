@@ -3,6 +3,7 @@ import json
 import sqlite3
 import time
 import pygame
+import webbrowser
 
 conn = sqlite3.connect('qmusic.db')
 print "Opened database successfully"
@@ -151,16 +152,18 @@ def download_file(url, path):
     f.close()
 
 
+def show_lyric(lyric):
+    return
 if __name__ == "__main__":
     # get_top()
-    pygame.mixer.init()
-    # r = c.execute("select songmid from top_song_list")
-    # for d in r:
-    #     songmid = d[0]
-    #     url = get_single_song_local(songmid)
-    #     play_song("http://"+url)
-    #     break
+    r = c.execute("SELECT lyric FROM top_song_list WHERE songmid = ?", ("001bhwUC1gE6ep",))
+    for d in r:
+        lyric = d[0]
+        print  lyric
+        break
     url = "http://" + get_single_song_local("001bhwUC1gE6ep")
-    download_file(url, "./music.m4a")
-    play_song("./music.m4a")
+    webbrowser.open(url)
+
+    # download_file(url, "./music.m4a")
+    # play_song("./music.m4a")
     conn.close()
