@@ -1,9 +1,11 @@
+
 import requests
 import json
 import sqlite3
 import time
 import pygame
 import webbrowser
+import schedule
 
 conn = sqlite3.connect('qmusic.db')
 print "Opened database successfully"
@@ -153,16 +155,29 @@ def download_file(url, path):
 
 
 def show_lyric(lyric):
+
     return
+
+
 if __name__ == "__main__":
     # get_top()
     r = c.execute("SELECT lyric FROM top_song_list WHERE songmid = ?", ("001bhwUC1gE6ep",))
+    lyric = ""
     for d in r:
         lyric = d[0]
         print  lyric
         break
-    url = "http://" + get_single_song_local("001bhwUC1gE6ep")
-    webbrowser.open(url)
+    show_lyric(lyric)
+    import datetime
+
+    l = "[04:43.18]LOvesadsa"
+    print l[0:10]
+    now = datetime.datetime.strptime("[00:00.00]", "[%M:%S.%f]")
+
+    print datetime.datetime.strptime("[04:35.78]", "[%M:%S.%f]")
+    # schedule.every(1).seconds.do()
+    # url = "http://" + get_single_song_local("001bhwUC1gE6ep")
+    # webbrowser.open(url)
 
     # download_file(url, "./music.m4a")
     # play_song("./music.m4a")
