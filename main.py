@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# -*- coding: UTF-8 -*-
+
 
 import requests
 import json
@@ -6,6 +9,7 @@ import time
 import pygame
 import webbrowser
 import schedule
+import qmusic as qm
 
 conn = sqlite3.connect('qmusic.db')
 print "Opened database successfully"
@@ -27,12 +31,13 @@ c.execute('''
   albumname TEXT, 
   songorig TEXT,
   songname TEXT,
-  albumid INT,
+  albumid TEXT,
   singer TEXT,
   songmid TEXT,
   date TEXT,
-  tid INT,
-  lyric TEXT 
+  tid TEXT,
+  lyric TEXT,
+  shortcut TEXT 
 )''')
 
 conn.commit()
@@ -45,7 +50,7 @@ def get_top():
               "&jsonCallback= "
     json_top = requests.get(url_top).content[14:-1]
     dic_top = json.loads(json_top)
-    pretty_json(dic_top)
+    # pretty_json(dic_top)
     for group in dic_top:
         for song in group['List']:
             d = (song['topID'],
@@ -57,10 +62,10 @@ def get_top():
                  group['GroupName'],
                  group['Type'])
             try:
-                c.execute("INSERT INTO top_songs VALUES(?,?,?,?,?,?,?,?)", d)
+                c.execute("INSERT OR IGNORE INTO top_songs VALUES(?,?,?,?,?,?,?,?)", d)
                 conn.commit()
-            except:
-                print "error"
+            except Exception, ex:
+                print "apply top song list with errors", ex.message
             type = ""
             if song['type'] == 0:
                 type = "top"
@@ -78,11 +83,15 @@ def get_top_songs(tid, update_Key, type):
     url = 'https://c.y.qq.com/v8/fcg-bin/fcg_v8_toplist_cp.fcg?tpl=3&page=detail&date=%s&topid=%s&type=%s' \
           '&song_begin=0&song_num=100&g_tk=5381&jsonpCallback=&loginUin=0&hostUin=0&format' \
           '=jsonp&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0 ' % (update_Key, tid, type)
-    dic_top_songs = json.loads(requests.get(url).content)
+    content = requests.get(url).content
+    dic_top_songs = json.loads(content)
     # pretty_json(dic_top_songs)
+    if dic_top_songs['code'] == -1:
+        return
     for s in dic_top_songs['songlist']:
         data = s['data']
-        d = (data['songid'],
+        id = data['songid']
+        d = (id,
              data['albumname'],
              data['songorig'],
              data['songname'],
@@ -92,19 +101,22 @@ def get_top_songs(tid, update_Key, type):
              data['songmid'],
              update_Key,
              tid)
+        try:
+            print "execute song with id = %s" % (data['songid'])
+            c.execute(
+                "INSERT OR IGNORE INTO top_song_list(songid,albumname,songorig,songname,albumid,singer,songmid,date,tid) VALUES ( ?,?,?,?,?,?,?,?,?)",
+                d)
 
-        try:
-            c.execute("INSERT  INTO top_song_list VALUES ( ?,?,?,?,?,?,?,?,?,?)", d)
             conn.commit()
-        except Exception as ex:
-            print ex.message
+        except Exception, ex:
+            print "apply song list data with errors:", ex.message
             return
-        lyric = get_song_detail(data['songid'])
+        lyric = get_song_detail(id)
         try:
-            c.execute("INSERT  INTO top_song_list (lyric)VALUES (?)", (lyric))
+            c.execute("UPDATE top_song_list SET lyric = ? WHERE songid = ?", (lyric, id))
             conn.commit()
         except Exception as ex:
-            print "append lyric error:", ex.message
+            print "append lyric with errors:", ex.message
 
 def get_song_detail(sid):
     params = '''
@@ -161,24 +173,28 @@ def show_lyric(lyric):
 
 if __name__ == "__main__":
     # get_top()
-    r = c.execute("SELECT lyric FROM top_song_list WHERE songmid = ?", ("001bhwUC1gE6ep",))
-    lyric = ""
-    for d in r:
-        lyric = d[0]
-        print  lyric
-        break
-    show_lyric(lyric)
-    import datetime
-
-    l = "[04:43.18]LOvesadsa"
-    print l[0:10]
-    now = datetime.datetime.strptime("[00:00.00]", "[%M:%S.%f]")
-
-    print datetime.datetime.strptime("[04:35.78]", "[%M:%S.%f]")
-    # schedule.every(1).seconds.do()
-    # url = "http://" + get_single_song_local("001bhwUC1gE6ep")
-    # webbrowser.open(url)
-
-    # download_file(url, "./music.m4a")
-    # play_song("./music.m4a")
-    conn.close()
+    # newSong = qm.get_new_songs()
+    # print "Size","=",newSong["size"]
+    # for v in newSong["song_list"]:
+    #     print get_single_song(v["mid"])
+    qm.search("生命要继续")
+    # r = c.execute("SELECT lyric FROM top_song_list WHERE songmid = ?", ("001bhwUC1gE6ep",))
+    # lyric = ""
+    # for d in r:
+    #     lyric = d[0]
+    #     print  lyric
+    #     break
+    # show_lyric(lyric)
+    # import datetime
+    #
+    # l = "[04:43.18]LOvesadsa"
+    # print l[0:10]
+    # now = datetime.datetime.strptime("[00:00.00]", "[%M:%S.%f]")
+    # print datetime.datetime.strptime("[04:35.78]", "[%M:%S.%f]")
+    # # schedule.every(1).seconds.do()
+    # # url = "http://" + get_single_song_local("001bhwUC1gE6ep")
+    # # webbrowser.open(url)
+    #
+    # # download_file(url, "./music.m4a")
+    # # play_song("./music.m4a")
+    # conn.close()
