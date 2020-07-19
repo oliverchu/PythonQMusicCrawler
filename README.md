@@ -1,0 +1,2 @@
+# PythonQMusicCrawler
+写的一款爬取某音乐网站歌曲信息的python项目，准备做歌词的数据分析
